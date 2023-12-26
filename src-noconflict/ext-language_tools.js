@@ -1,4 +1,4 @@
-ace.define("ace/snippets",["require","exports","module","ace/lib/dom","ace/lib/oop","ace/lib/event_emitter","ace/lib/lang","ace/range","ace/range_list","ace/keyboard/hash_handler","ace/tokenizer","ace/clipboard","ace/editor"], function(require, exports, module){"use strict";
+ace.define("ace/snippets",[], function(require, exports, module){"use strict";
 var dom = require("./lib/dom");
 var oop = require("./lib/oop");
 var EventEmitter = require("./lib/event_emitter").EventEmitter;
@@ -965,7 +965,7 @@ var Editor = require("./editor").Editor;
 
 });
 
-ace.define("ace/autocomplete/popup",["require","exports","module","ace/virtual_renderer","ace/editor","ace/range","ace/lib/event","ace/lib/lang","ace/lib/dom","ace/config","ace/lib/useragent"], function(require, exports, module){"use strict";
+ace.define("ace/autocomplete/popup",[], function(require, exports, module){"use strict";
 var Renderer = require("../virtual_renderer").VirtualRenderer;
 var Editor = require("../editor").Editor;
 var Range = require("../range").Range;
@@ -1314,7 +1314,7 @@ exports.getAriaId = getAriaId;
 
 });
 
-ace.define("ace/autocomplete/inline_screenreader",["require","exports","module"], function(require, exports, module){"use strict";
+ace.define("ace/autocomplete/inline_screenreader",[], function(require, exports, module){"use strict";
 var AceInlineScreenReader = /** @class */ (function () {
     function AceInlineScreenReader(editor) {
         this.editor = editor;
@@ -1366,7 +1366,7 @@ exports.AceInlineScreenReader = AceInlineScreenReader;
 
 });
 
-ace.define("ace/autocomplete/inline",["require","exports","module","ace/snippets","ace/autocomplete/inline_screenreader"], function(require, exports, module){"use strict";
+ace.define("ace/autocomplete/inline",[], function(require, exports, module){"use strict";
 var snippetManager = require("../snippets").snippetManager;
 var AceInlineScreenReader = require("./inline_screenreader").AceInlineScreenReader;
 var AceInline = /** @class */ (function () {
@@ -1428,7 +1428,7 @@ exports.AceInline = AceInline;
 
 });
 
-ace.define("ace/autocomplete/util",["require","exports","module"], function(require, exports, module){"use strict";
+ace.define("ace/autocomplete/util",[], function(require, exports, module){"use strict";
 exports.parForEach = function (array, fn, callback) {
     var completed = 0;
     var arLength = array.length;
@@ -1493,7 +1493,7 @@ exports.triggerAutocomplete = function (editor) {
 
 });
 
-ace.define("ace/autocomplete",["require","exports","module","ace/keyboard/hash_handler","ace/autocomplete/popup","ace/autocomplete/inline","ace/autocomplete/popup","ace/autocomplete/util","ace/lib/lang","ace/lib/dom","ace/snippets","ace/config","ace/lib/event","ace/lib/scroll"], function(require, exports, module){"use strict";
+ace.define("ace/autocomplete",[], function(require, exports, module){"use strict";
 var HashHandler = require("./keyboard/hash_handler").HashHandler;
 var AcePopup = require("./autocomplete/popup").AcePopup;
 var AceInline = require("./autocomplete/inline").AceInline;
@@ -2288,7 +2288,7 @@ exports.FilteredList = FilteredList;
 
 });
 
-ace.define("ace/autocomplete/text_completer",["require","exports","module","ace/range"], function(require, exports, module){var Range = require("../range").Range;
+ace.define("ace/autocomplete/text_completer",[], function(require, exports, module){var Range = require("../range").Range;
 var splitRegex = /[^a-zA-Z_0-9\$\-\u00C0-\u1FFF\u2C00-\uD7FF\w]+/;
 function getWordIndex(doc, pos) {
     var textBefore = doc.getTextRange(Range.fromPoints({
@@ -2331,7 +2331,7 @@ exports.getCompletions = function (editor, session, pos, prefix, callback) {
 
 });
 
-ace.define("ace/ext/language_tools",["require","exports","module","ace/snippets","ace/autocomplete","ace/config","ace/lib/lang","ace/autocomplete/util","ace/autocomplete/text_completer","ace/editor","ace/config"], function(require, exports, module){"use strict";
+ace.define("ace/ext/language_tools",[], function(require, exports, module){"use strict";
 var snippetManager = require("../snippets").snippetManager;
 var Autocomplete = require("../autocomplete").Autocomplete;
 var config = require("../config");

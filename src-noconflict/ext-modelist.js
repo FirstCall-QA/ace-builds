@@ -1,4 +1,4 @@
-ace.define("ace/ext/modelist",["require","exports","module"], function(require, exports, module){"use strict";
+ace.define("ace/ext/modelist",[], function(require, exports, module){"use strict";
 var modes = [];
 function getModeForPath(path) {
     var mode = modesByName.text;
