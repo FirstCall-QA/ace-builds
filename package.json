@@ -1,9 +1,9 @@
 {
-    "name": "ace-builds",
+    "name": "@firstcall-qa/ace-builds",
     "main": "./src-noconflict/ace.js",
     "typings": "ace.d.ts",
-    "version": "1.32.2",
-    "description": "Ace (Ajax.org Cloud9 Editor)",
+    "version": "1.32.2-1.0",
+    "description": "FirstCall QA fork of Ace (Ajax.org Cloud9 Editor)",
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1"
     },
