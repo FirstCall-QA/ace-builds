@@ -1465,18 +1465,31 @@ exports.retrieveFollowingIdentifier = function (text, pos, regex) {
     }
     return buf;
 };
+var emptyPrefix = Symbol();
 exports.getCompletionPrefix = function (editor) {
     var pos = editor.getCursorPosition();
     var line = editor.session.getLine(pos.row);
     var prefix;
     editor.completers.forEach(function (completer) {
-        if (completer.identifierRegexps) {
+        if (prefix) {
+            return;
+        }
+        if (completer.getCompletionPrefix != null) {
+            prefix = completer.getCompletionPrefix(editor);
+            if (prefix === "") {
+                prefix = emptyPrefix;
+            }
+        }
+        if (!prefix && completer.identifierRegexps) {
             completer.identifierRegexps.forEach(function (identifierRegex) {
                 if (!prefix && identifierRegex)
                     prefix = this.retrievePrecedingIdentifier(line, pos.column, identifierRegex);
             }.bind(this));
         }
     }.bind(this));
+    if (prefix === emptyPrefix) {
+        return "";
+    }
     return prefix || this.retrievePrecedingIdentifier(line, pos.column);
 };
 exports.triggerAutocomplete = function (editor) {
