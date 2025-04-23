@@ -9819,6 +9819,7 @@ var EditSession = /** @class */ (function () {
             return this.join("\n");
         };
         this.$gutterCustomWidgets = {};
+        this.$gutterCustomWidgetsFactoryCache = {};
         this.bgTokenizer = new BackgroundTokenizer((new TextMode()).getTokenizer(), this);
         var _self = this;
         this.bgTokenizer.on("update", function (e) {
@@ -10052,14 +10053,13 @@ var EditSession = /** @class */ (function () {
         this._signal("changeBreakpoint", {});
     };
     EditSession.prototype.removeGutterCustomWidget = function (row) {
-        if (this.$editor) {
-            this.$editor.renderer.$gutterLayer.$removeCustomWidget(row);
-        }
+        delete this.$gutterCustomWidgets[row];
+        delete this.$gutterCustomWidgetsFactoryCache[row];
+        this._signal("changeGutterCustomWidget", {});
     };
     EditSession.prototype.addGutterCustomWidget = function (row, attributes) {
-        if (this.$editor) {
-            this.$editor.renderer.$gutterLayer.$addCustomWidget(row, attributes);
-        }
+        this.$gutterCustomWidgets[row] = attributes;
+        this._signal("changeGutterCustomWidget", {});
     };
     EditSession.prototype.removeGutterDecoration = function (row, className) {
         this.$decorations[row] = (this.$decorations[row] || "").replace(" " + className, "");
@@ -13845,6 +13845,7 @@ var Editor = /** @class */ (function () {
             this.session.off("changeFrontMarker", this.$onChangeFrontMarker);
             this.session.off("changeBackMarker", this.$onChangeBackMarker);
             this.session.off("changeBreakpoint", this.$onChangeBreakpoint);
+            this.session.off("changeGutterCustomWidget", this.$onChangeGutterCustomWidget);
             this.session.off("changeAnnotation", this.$onChangeAnnotation);
             this.session.off("changeOverwrite", this.$onCursorChange);
             this.session.off("changeScrollTop", this.$onScrollTopChange);
@@ -13876,6 +13877,8 @@ var Editor = /** @class */ (function () {
             this.session.on("changeBackMarker", this.$onChangeBackMarker);
             this.$onChangeBreakpoint = this.onChangeBreakpoint.bind(this);
             this.session.on("changeBreakpoint", this.$onChangeBreakpoint);
+            this.$onChangeGutterCustomWidget = this.onChangeGutterCustomWidget.bind(this);
+            this.session.on("changeGutterCustomWidget", this.$onChangeGutterCustomWidget);
             this.$onChangeAnnotation = this.onChangeAnnotation.bind(this);
             this.session.on("changeAnnotation", this.$onChangeAnnotation);
             this.$onCursorChange = this.onCursorChange.bind(this);
@@ -14140,6 +14143,9 @@ var Editor = /** @class */ (function () {
     };
     Editor.prototype.onChangeBreakpoint = function () {
         this.renderer.updateBreakpoints();
+    };
+    Editor.prototype.onChangeGutterCustomWidget = function () {
+        this.renderer.updateGutterCustomWidgets();
     };
     Editor.prototype.onChangeAnnotation = function () {
         this.renderer.setAnnotations(this.session.getAnnotations());
@@ -16089,10 +16095,10 @@ var Gutter = /** @class */ (function () {
         }
         var customWidgetAttributes = this.session.$gutterCustomWidgets[row];
         if (customWidgetAttributes) {
-            this.$addCustomWidget(row, customWidgetAttributes, cell);
+            this.$renderCustomWidget(row, customWidgetAttributes, cell);
         }
         else if (customWidget) {
-            this.$removeCustomWidget(row, cell);
+            this.$hideCustomWidget(cell);
         }
         if (annotationInFold && this.$showFoldedAnnotations) {
             annotationNode.className = "ace_gutter_annotation";
@@ -16139,64 +16145,58 @@ var Gutter = /** @class */ (function () {
             cell.element.setAttribute("aria-hidden", false);
         return cell;
     };
-    Gutter.prototype.$hideFoldWidget = function (row, cell) {
-        var rowCell = cell || this.$getGutterCell(row);
-        if (rowCell && rowCell.element) {
-            var foldWidget = rowCell.element.childNodes[1];
+    Gutter.prototype.$hideFoldWidget = function (cell) {
+        if (cell && cell.element) {
+            var foldWidget = cell.element.childNodes[1];
             if (foldWidget) {
                 dom.setStyle(foldWidget.style, "display", "none");
             }
         }
     };
-    Gutter.prototype.$showFoldWidget = function (row, cell) {
-        var rowCell = cell || this.$getGutterCell(row);
-        if (rowCell && rowCell.element) {
-            var foldWidget = rowCell.element.childNodes[1];
-            if (foldWidget && this.session.foldWidgets[rowCell.row]) {
+    Gutter.prototype.$showFoldWidget = function (cell) {
+        if (cell && cell.element && cell.element && this.session.foldWidgets) {
+            var foldWidget = cell.element.childNodes[1];
+            if (foldWidget && this.session.foldWidgets[cell.row]) {
                 dom.setStyle(foldWidget.style, "display", "inline-block");
             }
         }
     };
-    Gutter.prototype.$getGutterCell = function (row) {
-        var cells = this.$lines.cells;
-        var visibileRow = this.session.documentToScreenRow(row, 0);
-        return cells[row - this.config.firstRowScreen - (row - visibileRow)];
-    };
-    Gutter.prototype.$addCustomWidget = function (row, _a, cell) {
-        var className = _a.className, label = _a.label, title = _a.title, callbacks = _a.callbacks;
-        this.session.$gutterCustomWidgets[row] = { className: className, label: label, title: title, callbacks: callbacks };
-        this.$hideFoldWidget(row, cell);
-        var rowCell = cell || this.$getGutterCell(row);
-        if (rowCell && rowCell.element) {
-            var customWidget = rowCell.element.querySelector(".ace_custom-widget");
+    Gutter.prototype.$renderCustomWidget = function (row, _a, cell) {
+        var factory = _a.factory;
+        this.$hideFoldWidget(cell);
+        if (cell && cell.element) {
+            var cachedFactory = this.session.$gutterCustomWidgetsFactoryCache[row];
+            if (cell.element.childNodes[3] != null && factory === cachedFactory) {
+                return;
+            }
+            this.session.$gutterCustomWidgetsFactoryCache[row] = factory;
+            var customWidget = factory(row);
             if (customWidget) {
-                customWidget.remove();
+                if (cell.element.childNodes[3]) {
+                    cell.element.childNodes[3].remove();
+                }
+                cell.element.appendChild(customWidget);
             }
-            customWidget = dom.createElement("span");
-            customWidget.className = "ace_custom-widget ".concat(className);
-            customWidget.setAttribute("tabindex", "-1");
-            customWidget.setAttribute("role", 'button');
-            customWidget.setAttribute("aria-label", label);
-            customWidget.setAttribute("title", title);
-            dom.setStyle(customWidget.style, "display", "inline-block");
-            dom.setStyle(customWidget.style, "height", "inherit");
-            if (callbacks && callbacks.onClick) {
-                customWidget.addEventListener("click", function (e) {
-                    callbacks.onClick(e, row);
-                    e.stopPropagation();
-                });
+            else {
+                this.$hideCustomWidget(cell);
             }
-            rowCell.element.appendChild(customWidget);
         }
     };
-    Gutter.prototype.$removeCustomWidget = function (row, cell) {
-        delete this.session.$gutterCustomWidgets[row];
-        this.$showFoldWidget(row, cell);
-        var rowCell = cell || this.$getGutterCell(row);
-        if (rowCell && rowCell.element) {
-            var customWidget = rowCell.element.querySelector(".ace_custom-widget");
-            if (customWidget) {
-                rowCell.element.removeChild(customWidget);
+    Gutter.prototype.$hideCustomWidget = function (cell) {
+        this.$showFoldWidget(cell);
+        if (cell && cell.element) {
+            var customWidgetStub = cell.element.querySelector(".ace_custom-widget-stub");
+            if (customWidgetStub) {
+            }
+            else {
+                var customWidget = cell.element.childNodes[3];
+                if (customWidget) {
+                    customWidget.remove();
+                }
+                var stub = dom.createElement("span");
+                stub.className = "ace_custom-widget-stub";
+                dom.setStyle(stub.style, "display", "none");
+                cell.element.appendChild(stub);
             }
         }
     };
@@ -18795,6 +18795,9 @@ var VirtualRenderer = /** @class */ (function () {
     };
     VirtualRenderer.prototype.updateBreakpoints = function (rows) {
         this._rows = rows;
+        this.$loop.schedule(this.CHANGE_GUTTER);
+    };
+    VirtualRenderer.prototype.updateGutterCustomWidgets = function () {
         this.$loop.schedule(this.CHANGE_GUTTER);
     };
     VirtualRenderer.prototype.setAnnotations = function (annotations) {
