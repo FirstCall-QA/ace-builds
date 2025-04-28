@@ -9819,7 +9819,6 @@ var EditSession = /** @class */ (function () {
             return this.join("\n");
         };
         this.$gutterCustomWidgets = {};
-        this.$gutterCustomWidgetsFactoryCache = {};
         this.bgTokenizer = new BackgroundTokenizer((new TextMode()).getTokenizer(), this);
         var _self = this;
         this.bgTokenizer.on("update", function (e) {
@@ -10054,7 +10053,6 @@ var EditSession = /** @class */ (function () {
     };
     EditSession.prototype.removeGutterCustomWidget = function (row) {
         delete this.$gutterCustomWidgets[row];
-        delete this.$gutterCustomWidgetsFactoryCache[row];
         this._signal("changeGutterCustomWidget", {});
     };
     EditSession.prototype.addGutterCustomWidget = function (row, attributes) {
@@ -16165,17 +16163,15 @@ var Gutter = /** @class */ (function () {
         var factory = _a.factory;
         this.$hideFoldWidget(cell);
         if (cell && cell.element) {
-            var cachedFactory = this.session.$gutterCustomWidgetsFactoryCache[row];
-            if (cell.element.childNodes[3] != null && factory === cachedFactory) {
-                return;
-            }
-            this.session.$gutterCustomWidgetsFactoryCache[row] = factory;
             var customWidget = factory(row);
             if (customWidget) {
-                if (cell.element.childNodes[3]) {
-                    cell.element.childNodes[3].remove();
+                var existingNode = cell.element.childNodes[3];
+                if (existingNode) {
+                    existingNode.replaceWith(customWidget);
                 }
-                cell.element.appendChild(customWidget);
+                else {
+                    cell.element.appendChild(customWidget);
+                }
             }
             else {
                 this.$hideCustomWidget(cell);
