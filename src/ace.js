@@ -2366,13 +2366,17 @@ TextInput = function (parentNode, host) {
         }
     };
     var handleClipboardData = function (e, data, forceIEMime) {
+        var textData = !data ? null : typeof data == "string" || data instanceof String ? data : data.plainText;
         var clipboardData = e.clipboardData || window["clipboardData"];
         if (!clipboardData || BROKEN_SETDATA)
             return;
         var mime = USE_IE_MIME_TYPE || forceIEMime ? "Text" : "text/plain";
         try {
-            if (data) {
-                return clipboardData.setData(mime, data) !== false;
+            if (textData) {
+                if (Array.isArray(data.extendedFormats)) {
+                    data.extendedFormats.forEach(function (x) { return clipboardData.setData(x.format, x.data); });
+                }
+                return clipboardData.setData(mime, textData) !== false;
             }
             else {
                 return clipboardData.getData(mime);
@@ -2384,10 +2388,17 @@ TextInput = function (parentNode, host) {
         }
     };
     var doCopy = function (e, isCut) {
-        var data = host.getCopyText();
+        var dataEx = host.getCopyTextExtended ? host.getCopyTextExtended() : undefined;
+        var data;
+        if (dataEx) {
+            data = dataEx.plainText;
+        }
+        else {
+            data = host.getCopyText();
+        }
         if (!data)
             return event.preventDefault(e);
-        if (handleClipboardData(e, data)) {
+        if (handleClipboardData(e, dataEx == null ? data : dataEx)) {
             if (isIOS) {
                 resetSelection(data);
                 copied = data;
@@ -7200,6 +7211,31 @@ exports.Anchor = Anchor;
 });
 
 define("ace/document",["require","exports","module","ace/lib/oop","ace/apply_delta","ace/lib/event_emitter","ace/range","ace/anchor"], function(require, exports, module){"use strict";
+var __read = (this && this.__read) || function (o, n) {
+    var m = typeof Symbol === "function" && o[Symbol.iterator];
+    if (!m) return o;
+    var i = m.call(o), r, ar = [], e;
+    try {
+        while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
+    }
+    catch (error) { e = { error: error }; }
+    finally {
+        try {
+            if (r && !r.done && (m = i["return"])) m.call(i);
+        }
+        finally { if (e) throw e.error; }
+    }
+    return ar;
+};
+var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
+    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
+        if (ar || !(i in from)) {
+            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
+            ar[i] = from[i];
+        }
+    }
+    return to.concat(ar || Array.prototype.slice.call(from));
+};
 var oop = require("./lib/oop");
 var applyDelta = require("./apply_delta").applyDelta;
 var EventEmitter = require("./lib/event_emitter").EventEmitter;
@@ -7465,8 +7501,14 @@ var Document = /** @class */ (function () {
             this.$splitAndapplyLargeDelta(delta, 20000);
         }
         else {
+            var docLinesBefore = __spreadArray([], __read(this.$lines), false);
             applyDelta(this.$lines, delta, doNotValidate);
+            var docLinesAfter = __spreadArray([], __read(this.$lines), false);
+            delta.docLinesBefore = docLinesBefore;
+            delta.docLinesAfter = docLinesAfter;
             this._signal("change", delta);
+            delete delta.docLinesBefore;
+            delete delta.docLinesAfter;
         }
     };
     Document.prototype.$safeApplyDelta = function (delta) {
@@ -7502,7 +7544,8 @@ var Document = /** @class */ (function () {
             start: this.clonePos(delta.start),
             end: this.clonePos(delta.end),
             action: (delta.action == "insert" ? "remove" : "insert"),
-            lines: delta.lines.slice()
+            lines: delta.lines.slice(),
+            undoOfDelta: delta
         });
     };
     Document.prototype.indexToPosition = function (index, startRow) {
@@ -14164,6 +14207,20 @@ var Editor = /** @class */ (function () {
     };
     Editor.prototype.getSelectedText = function () {
         return this.session.getTextRange(this.getSelectionRange());
+    };
+    Editor.prototype.getCopyTextExtended = function () {
+        var mode = this.session.getMode();
+        var copyResult;
+        if (mode.onGetCopyTextExtended) {
+            copyResult = mode.onGetCopyTextExtended(this);
+        }
+        if (!copyResult) {
+            return;
+        }
+        var e = { text: copyResult.plainText };
+        this._signal("copy", e);
+        clipboard.lineMode = copyResult.copyLineMode ? e.text : false;
+        return copyResult;
     };
     Editor.prototype.getCopyText = function () {
         var text = this.getSelectedText();

@@ -274,6 +274,11 @@ export namespace Ace {
     start: Point;
     end: Point;
     lines: string[];
+    id?: number,
+    folds?: Fold[]
+    docLinesBefore?: string[];
+    docLinesAfter?: string[];
+    undoOfDelta?: Delta;
   }
 
   export interface Annotation {
@@ -445,6 +450,18 @@ export namespace Ace {
       session: EditSession,
       pos: Point,
       prefix: string): Completion[];
+    onGetCopyTextExtended?: (editor: Editor) => OnGetCopyTextExtendedResult | undefined;
+  }
+
+  interface OnGetCopyTextExtendedResult {
+    plainText: string;
+    copyLineMode?: boolean;
+    extendedFormats?: ClipboardFormatData[];
+  }
+
+  interface ClipboardFormatData {
+    format: string;
+    data: string;
   }
 
   type AfterLoadCallback = (err: Error | null, module: unknown) => void;
@@ -901,6 +918,7 @@ export namespace Ace {
     blur(): void;
     getSelectedText(): string;
     getCopyText(): string;
+    getCopyTextExtended?: () => OnGetCopyTextExtendedResult | undefined;
     execCommand(command: string | string[], args?: any): boolean;
     insert(text: string, pasted?: boolean): void;
     setOverwrite(overwrite: boolean): void;
