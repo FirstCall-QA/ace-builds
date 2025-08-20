@@ -1043,19 +1043,20 @@ var Document = /** @class */ (function () {
         console.warn("Use of document.insertNewLine is deprecated. Use insertMergedLines(position, ['', '']) instead.");
         return this.insertMergedLines(position, ["", ""]);
     };
-    Document.prototype.insert = function (position, text) {
+    Document.prototype.insert = function (position, text, reason) {
         if (this.getLength() <= 1)
             this.$detectNewLine(text);
-        return this.insertMergedLines(position, this.$split(text));
+        return this.insertMergedLines(position, this.$split(text), reason);
     };
-    Document.prototype.insertInLine = function (position, text) {
+    Document.prototype.insertInLine = function (position, text, reason) {
         var start = this.clippedPos(position.row, position.column);
         var end = this.pos(position.row, position.column + text.length);
         this.applyDelta({
             start: start,
             end: end,
             action: "insert",
-            lines: [text]
+            lines: [text],
+            reason: reason
         }, true);
         return this.clonePos(end);
     };
@@ -1109,7 +1110,7 @@ var Document = /** @class */ (function () {
         }
         this.insertMergedLines({ row: row, column: column }, lines);
     };
-    Document.prototype.insertMergedLines = function (position, lines) {
+    Document.prototype.insertMergedLines = function (position, lines, reason) {
         var start = this.clippedPos(position.row, position.column);
         var end = {
             row: start.row + lines.length - 1,
@@ -1119,33 +1120,36 @@ var Document = /** @class */ (function () {
             start: start,
             end: end,
             action: "insert",
-            lines: lines
+            lines: lines,
+            reason: reason
         });
         return this.clonePos(end);
     };
-    Document.prototype.remove = function (range) {
+    Document.prototype.remove = function (range, reason) {
         var start = this.clippedPos(range.start.row, range.start.column);
         var end = this.clippedPos(range.end.row, range.end.column);
         this.applyDelta({
             start: start,
             end: end,
             action: "remove",
-            lines: this.getLinesForRange({ start: start, end: end })
+            lines: this.getLinesForRange({ start: start, end: end }),
+            reason: reason
         });
         return this.clonePos(start);
     };
-    Document.prototype.removeInLine = function (row, startColumn, endColumn) {
+    Document.prototype.removeInLine = function (row, startColumn, endColumn, reason) {
         var start = this.clippedPos(row, startColumn);
         var end = this.clippedPos(row, endColumn);
         this.applyDelta({
             start: start,
             end: end,
             action: "remove",
-            lines: this.getLinesForRange({ start: start, end: end })
+            lines: this.getLinesForRange({ start: start, end: end }),
+            reason: reason
         }, true);
         return this.clonePos(start);
     };
-    Document.prototype.removeFullLines = function (firstRow, lastRow) {
+    Document.prototype.removeFullLines = function (firstRow, lastRow, reason) {
         firstRow = Math.min(Math.max(0, firstRow), this.getLength() - 1);
         lastRow = Math.min(Math.max(0, lastRow), this.getLength() - 1);
         var deleteFirstNewLine = lastRow == this.getLength() - 1 && firstRow > 0;
@@ -1160,17 +1164,19 @@ var Document = /** @class */ (function () {
             start: range.start,
             end: range.end,
             action: "remove",
-            lines: this.getLinesForRange(range)
+            lines: this.getLinesForRange(range),
+            reason: reason
         });
         return deletedLines;
     };
-    Document.prototype.removeNewLine = function (row) {
+    Document.prototype.removeNewLine = function (row, reason) {
         if (row < this.getLength() - 1 && row >= 0) {
             this.applyDelta({
                 start: this.pos(row, this.getLine(row).length),
                 end: this.pos(row + 1, 0),
                 action: "remove",
-                lines: ["", ""]
+                lines: ["", ""],
+                reason: reason
             });
         }
     };

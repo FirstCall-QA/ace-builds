@@ -2427,12 +2427,20 @@ TextInput = function (parentNode, host) {
         doCopy(e, false);
     };
     var onPaste = function (e) {
-        var data = handleClipboardData(e);
+        var preProcessResult = host.preProcessClipboardOnPasting(e); // e - ClipboardEvent
+        console.log('preProcessResult', preProcessResult);
+        var data;
+        if (preProcessResult != null && preProcessResult.flatTextOverride != null) {
+            data = preProcessResult.flatTextOverride;
+        }
+        else {
+            data = handleClipboardData(e);
+        }
         if (clipboard.pasteCancelled())
             return;
         if (typeof data == "string") {
             if (data)
-                host.onPaste(data, e);
+                host.onPaste(data, e, preProcessResult);
             if (useragent.isIE)
                 setTimeout(resetSelection);
             event.preventDefault(e);
@@ -7333,19 +7341,20 @@ var Document = /** @class */ (function () {
         console.warn("Use of document.insertNewLine is deprecated. Use insertMergedLines(position, ['', '']) instead.");
         return this.insertMergedLines(position, ["", ""]);
     };
-    Document.prototype.insert = function (position, text) {
+    Document.prototype.insert = function (position, text, reason) {
         if (this.getLength() <= 1)
             this.$detectNewLine(text);
-        return this.insertMergedLines(position, this.$split(text));
+        return this.insertMergedLines(position, this.$split(text), reason);
     };
-    Document.prototype.insertInLine = function (position, text) {
+    Document.prototype.insertInLine = function (position, text, reason) {
         var start = this.clippedPos(position.row, position.column);
         var end = this.pos(position.row, position.column + text.length);
         this.applyDelta({
             start: start,
             end: end,
             action: "insert",
-            lines: [text]
+            lines: [text],
+            reason: reason
         }, true);
         return this.clonePos(end);
     };
@@ -7399,7 +7408,7 @@ var Document = /** @class */ (function () {
         }
         this.insertMergedLines({ row: row, column: column }, lines);
     };
-    Document.prototype.insertMergedLines = function (position, lines) {
+    Document.prototype.insertMergedLines = function (position, lines, reason) {
         var start = this.clippedPos(position.row, position.column);
         var end = {
             row: start.row + lines.length - 1,
@@ -7409,33 +7418,36 @@ var Document = /** @class */ (function () {
             start: start,
             end: end,
             action: "insert",
-            lines: lines
+            lines: lines,
+            reason: reason
         });
         return this.clonePos(end);
     };
-    Document.prototype.remove = function (range) {
+    Document.prototype.remove = function (range, reason) {
         var start = this.clippedPos(range.start.row, range.start.column);
         var end = this.clippedPos(range.end.row, range.end.column);
         this.applyDelta({
             start: start,
             end: end,
             action: "remove",
-            lines: this.getLinesForRange({ start: start, end: end })
+            lines: this.getLinesForRange({ start: start, end: end }),
+            reason: reason
         });
         return this.clonePos(start);
     };
-    Document.prototype.removeInLine = function (row, startColumn, endColumn) {
+    Document.prototype.removeInLine = function (row, startColumn, endColumn, reason) {
         var start = this.clippedPos(row, startColumn);
         var end = this.clippedPos(row, endColumn);
         this.applyDelta({
             start: start,
             end: end,
             action: "remove",
-            lines: this.getLinesForRange({ start: start, end: end })
+            lines: this.getLinesForRange({ start: start, end: end }),
+            reason: reason
         }, true);
         return this.clonePos(start);
     };
-    Document.prototype.removeFullLines = function (firstRow, lastRow) {
+    Document.prototype.removeFullLines = function (firstRow, lastRow, reason) {
         firstRow = Math.min(Math.max(0, firstRow), this.getLength() - 1);
         lastRow = Math.min(Math.max(0, lastRow), this.getLength() - 1);
         var deleteFirstNewLine = lastRow == this.getLength() - 1 && firstRow > 0;
@@ -7450,17 +7462,19 @@ var Document = /** @class */ (function () {
             start: range.start,
             end: range.end,
             action: "remove",
-            lines: this.getLinesForRange(range)
+            lines: this.getLinesForRange(range),
+            reason: reason
         });
         return deletedLines;
     };
-    Document.prototype.removeNewLine = function (row) {
+    Document.prototype.removeNewLine = function (row, reason) {
         if (row < this.getLength() - 1 && row >= 0) {
             this.applyDelta({
                 start: this.pos(row, this.getLine(row).length),
                 end: this.pos(row + 1, 0),
                 action: "remove",
-                lines: ["", ""]
+                lines: ["", ""],
+                reason: reason
             });
         }
     };
@@ -10421,11 +10435,11 @@ var EditSession = /** @class */ (function () {
     EditSession.prototype.getTextRange = function (range) {
         return this.doc.getTextRange(range || this.selection.getRange());
     };
-    EditSession.prototype.insert = function (position, text) {
-        return this.doc.insert(position, text);
+    EditSession.prototype.insert = function (position, text, reason) {
+        return this.doc.insert(position, text, reason);
     };
-    EditSession.prototype.remove = function (range) {
-        return this.doc.remove(range);
+    EditSession.prototype.remove = function (range, reason) {
+        return this.doc.remove(range, reason);
     };
     EditSession.prototype.removeFullLines = function (firstRow, lastRow) {
         return this.doc.removeFullLines(firstRow, lastRow);
@@ -14247,26 +14261,43 @@ var Editor = /** @class */ (function () {
     Editor.prototype.onCut = function () {
         this.commands.exec("cut", this);
     };
-    Editor.prototype.onPaste = function (text, event) {
-        var e = { text: text, event: event };
+    Editor.prototype.onPaste = function (text, event, preProcessResult) {
+        var e = { text: text, event: event, preProcessResult: preProcessResult };
         this.commands.exec("paste", this, e);
     };
+    Editor.prototype.preProcessClipboardOnPasting = function (clipboardEvent) {
+        var onPreProcessClipboardOnPasting = this.session.getMode().onPreProcessClipboardOnPasting;
+        if (onPreProcessClipboardOnPasting != null) {
+            return onPreProcessClipboardOnPasting(this, clipboardEvent);
+        }
+    };
     Editor.prototype.$handlePaste = function (e) {
-        if (typeof e == "string")
+        var preProcessResult;
+        if (typeof e == "string") {
             e = { text: e };
+        }
+        else if (e != null) {
+            preProcessResult = e.preProcessResult;
+        }
         this._signal("paste", e);
         var text = e.text;
+        var deltaReason = {
+            pasted: {}
+        };
+        if (preProcessResult != null && preProcessResult.deltaReasonDetails != null) {
+            deltaReason.pasted = preProcessResult.deltaReasonDetails;
+        }
         var lineMode = text === clipboard.lineMode;
         var session = this.session;
         if (!this.inMultiSelectMode || this.inVirtualSelectionMode) {
             if (lineMode)
-                session.insert({ row: this.selection.lead.row, column: 0 }, text);
+                session.insert({ row: this.selection.lead.row, column: 0 }, text, deltaReason);
             else
-                this.insert(text);
+                this.insert(text, undefined, deltaReason);
         }
         else if (lineMode) {
             this.selection.rangeList.ranges.forEach(function (range) {
-                session.insert({ row: range.start.row, column: 0 }, text);
+                session.insert({ row: range.start.row, column: 0 }, text, deltaReason);
             });
         }
         else {
@@ -14286,7 +14317,7 @@ var Editor = /** @class */ (function () {
     Editor.prototype.execCommand = function (command, args) {
         return this.commands.exec(command, this, args);
     };
-    Editor.prototype.insert = function (text, pasted) {
+    Editor.prototype.insert = function (text, pasted, deltaReason) {
         var session = this.session;
         var mode = session.getMode();
         var cursor = this.getCursorPosition();
@@ -14326,7 +14357,7 @@ var Editor = /** @class */ (function () {
         var lineState = session.getState(cursor.row);
         var line = session.getLine(cursor.row);
         var shouldOutdent = mode.checkOutdent(lineState, line, text);
-        session.insert(cursor, text);
+        session.insert(cursor, text, deltaReason);
         if (transform && transform.selection) {
             if (transform.selection.length == 2) { // Transform relative to the current column
                 this.selection.setSelectionRange(new Range(cursor.row, start + transform.selection[0], cursor.row, start + transform.selection[1]));
