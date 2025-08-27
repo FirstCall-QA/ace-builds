@@ -10040,6 +10040,13 @@ var EditSession = /** @class */ (function () {
         token.start = c - token.value.length;
         return token;
     };
+    EditSession.prototype.refreshTokenizerCache = function (firstRow, lastRow) {
+        for (var row = firstRow; row <= lastRow; row++) {
+            delete this.bgTokenizer.lines[row];
+            delete this.bgTokenizer.states[row];
+        }
+        this.bgTokenizer.fireUpdateEvent(firstRow, lastRow);
+    };
     EditSession.prototype.setUndoManager = function (undoManager) {
         this.$undoManager = undoManager;
         if (this.$informUndoManager)
@@ -14107,6 +14114,7 @@ var Editor = /** @class */ (function () {
         var wrap = this.session.$useWrapMode;
         var lastRow = (delta.start.row == delta.end.row ? delta.end.row : Infinity);
         this.renderer.updateLines(delta.start.row, lastRow, wrap);
+        this._signal("preChange", delta);
         this._signal("change", delta);
         this.$cursorChange();
     };
