@@ -2428,7 +2428,6 @@ TextInput = function (parentNode, host) {
     };
     var onPaste = function (e) {
         var preProcessResult = host.preProcessClipboardOnPasting(e); // e - ClipboardEvent
-        console.log('preProcessResult', preProcessResult);
         var data;
         if (preProcessResult != null && preProcessResult.flatTextOverride != null) {
             data = preProcessResult.flatTextOverride;
@@ -7507,8 +7506,11 @@ var Document = /** @class */ (function () {
     };
     Document.prototype.applyDelta = function (delta, doNotValidate) {
         var isInsert = delta.action == "insert";
-        if (isInsert ? delta.lines.length <= 1 && !delta.lines[0]
-            : !Range.comparePoints(delta.start, delta.end)) {
+        var isRemove = delta.action == "remove";
+        if (isInsert && delta.lines.length <= 1 && !delta.lines[0]) {
+            return;
+        }
+        if (isRemove && !Range.comparePoints(delta.start, delta.end)) {
             return;
         }
         if (isInsert && delta.lines.length > 20000) {
@@ -10463,6 +10465,12 @@ var EditSession = /** @class */ (function () {
             else if (delta.folds) {
                 this.addFolds(delta.folds);
             }
+            else {
+                var onUndoCustomDelta = this.getMode().onUndoCustomDelta;
+                if (onUndoCustomDelta != null) {
+                    onUndoCustomDelta(this, delta);
+                }
+            }
         }
         if (!dontSelect && this.$undoSelect) {
             if (deltas.selectionBefore)
@@ -10480,6 +10488,12 @@ var EditSession = /** @class */ (function () {
             var delta = deltas[i];
             if (delta.action == "insert" || delta.action == "remove") {
                 this.doc.$safeApplyDelta(delta);
+            }
+            else {
+                var onRedoCustomDelta = this.getMode().onRedoCustomDelta;
+                if (onRedoCustomDelta != null) {
+                    onRedoCustomDelta(this, delta);
+                }
             }
         }
         if (!dontSelect && this.$undoSelect) {

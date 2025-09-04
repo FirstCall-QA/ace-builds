@@ -1209,8 +1209,11 @@ var Document = /** @class */ (function () {
     };
     Document.prototype.applyDelta = function (delta, doNotValidate) {
         var isInsert = delta.action == "insert";
-        if (isInsert ? delta.lines.length <= 1 && !delta.lines[0]
-            : !Range.comparePoints(delta.start, delta.end)) {
+        var isRemove = delta.action == "remove";
+        if (isInsert && delta.lines.length <= 1 && !delta.lines[0]) {
+            return;
+        }
+        if (isRemove && !Range.comparePoints(delta.start, delta.end)) {
             return;
         }
         if (isInsert && delta.lines.length > 20000) {
