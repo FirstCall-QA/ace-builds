@@ -750,6 +750,31 @@ exports.Anchor = Anchor;
 });
 
 ace.define("ace/document",[], function(require, exports, module){"use strict";
+var __read = (this && this.__read) || function (o, n) {
+    var m = typeof Symbol === "function" && o[Symbol.iterator];
+    if (!m) return o;
+    var i = m.call(o), r, ar = [], e;
+    try {
+        while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
+    }
+    catch (error) { e = { error: error }; }
+    finally {
+        try {
+            if (r && !r.done && (m = i["return"])) m.call(i);
+        }
+        finally { if (e) throw e.error; }
+    }
+    return ar;
+};
+var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
+    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
+        if (ar || !(i in from)) {
+            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
+            ar[i] = from[i];
+        }
+    }
+    return to.concat(ar || Array.prototype.slice.call(from));
+};
 var oop = require("./lib/oop");
 var applyDelta = require("./apply_delta").applyDelta;
 var EventEmitter = require("./lib/event_emitter").EventEmitter;
@@ -847,19 +872,20 @@ var Document = /** @class */ (function () {
         console.warn("Use of document.insertNewLine is deprecated. Use insertMergedLines(position, ['', '']) instead.");
         return this.insertMergedLines(position, ["", ""]);
     };
-    Document.prototype.insert = function (position, text) {
+    Document.prototype.insert = function (position, text, reason) {
         if (this.getLength() <= 1)
             this.$detectNewLine(text);
-        return this.insertMergedLines(position, this.$split(text));
+        return this.insertMergedLines(position, this.$split(text), reason);
     };
-    Document.prototype.insertInLine = function (position, text) {
+    Document.prototype.insertInLine = function (position, text, reason) {
         var start = this.clippedPos(position.row, position.column);
         var end = this.pos(position.row, position.column + text.length);
         this.applyDelta({
             start: start,
             end: end,
             action: "insert",
-            lines: [text]
+            lines: [text],
+            reason: reason
         }, true);
         return this.clonePos(end);
     };
@@ -913,7 +939,7 @@ var Document = /** @class */ (function () {
         }
         this.insertMergedLines({ row: row, column: column }, lines);
     };
-    Document.prototype.insertMergedLines = function (position, lines) {
+    Document.prototype.insertMergedLines = function (position, lines, reason) {
         var start = this.clippedPos(position.row, position.column);
         var end = {
             row: start.row + lines.length - 1,
@@ -923,33 +949,36 @@ var Document = /** @class */ (function () {
             start: start,
             end: end,
             action: "insert",
-            lines: lines
+            lines: lines,
+            reason: reason
         });
         return this.clonePos(end);
     };
-    Document.prototype.remove = function (range) {
+    Document.prototype.remove = function (range, reason) {
         var start = this.clippedPos(range.start.row, range.start.column);
         var end = this.clippedPos(range.end.row, range.end.column);
         this.applyDelta({
             start: start,
             end: end,
             action: "remove",
-            lines: this.getLinesForRange({ start: start, end: end })
+            lines: this.getLinesForRange({ start: start, end: end }),
+            reason: reason
         });
         return this.clonePos(start);
     };
-    Document.prototype.removeInLine = function (row, startColumn, endColumn) {
+    Document.prototype.removeInLine = function (row, startColumn, endColumn, reason) {
         var start = this.clippedPos(row, startColumn);
         var end = this.clippedPos(row, endColumn);
         this.applyDelta({
             start: start,
             end: end,
             action: "remove",
-            lines: this.getLinesForRange({ start: start, end: end })
+            lines: this.getLinesForRange({ start: start, end: end }),
+            reason: reason
         }, true);
         return this.clonePos(start);
     };
-    Document.prototype.removeFullLines = function (firstRow, lastRow) {
+    Document.prototype.removeFullLines = function (firstRow, lastRow, reason) {
         firstRow = Math.min(Math.max(0, firstRow), this.getLength() - 1);
         lastRow = Math.min(Math.max(0, lastRow), this.getLength() - 1);
         var deleteFirstNewLine = lastRow == this.getLength() - 1 && firstRow > 0;
@@ -964,17 +993,19 @@ var Document = /** @class */ (function () {
             start: range.start,
             end: range.end,
             action: "remove",
-            lines: this.getLinesForRange(range)
+            lines: this.getLinesForRange(range),
+            reason: reason
         });
         return deletedLines;
     };
-    Document.prototype.removeNewLine = function (row) {
+    Document.prototype.removeNewLine = function (row, reason) {
         if (row < this.getLength() - 1 && row >= 0) {
             this.applyDelta({
                 start: this.pos(row, this.getLine(row).length),
                 end: this.pos(row + 1, 0),
                 action: "remove",
-                lines: ["", ""]
+                lines: ["", ""],
+                reason: reason
             });
         }
     };
@@ -1007,16 +1038,25 @@ var Document = /** @class */ (function () {
     };
     Document.prototype.applyDelta = function (delta, doNotValidate) {
         var isInsert = delta.action == "insert";
-        if (isInsert ? delta.lines.length <= 1 && !delta.lines[0]
-            : !Range.comparePoints(delta.start, delta.end)) {
+        var isRemove = delta.action == "remove";
+        if (isInsert && delta.lines.length <= 1 && !delta.lines[0]) {
+            return;
+        }
+        if (isRemove && !Range.comparePoints(delta.start, delta.end)) {
             return;
         }
         if (isInsert && delta.lines.length > 20000) {
             this.$splitAndapplyLargeDelta(delta, 20000);
         }
         else {
+            var docLinesBefore = __spreadArray([], __read(this.$lines), false);
             applyDelta(this.$lines, delta, doNotValidate);
+            var docLinesAfter = __spreadArray([], __read(this.$lines), false);
+            delta.docLinesBefore = docLinesBefore;
+            delta.docLinesAfter = docLinesAfter;
             this._signal("change", delta);
+            delete delta.docLinesBefore;
+            delete delta.docLinesAfter;
         }
     };
     Document.prototype.$safeApplyDelta = function (delta) {
@@ -1052,7 +1092,8 @@ var Document = /** @class */ (function () {
             start: this.clonePos(delta.start),
             end: this.clonePos(delta.end),
             action: (delta.action == "insert" ? "remove" : "insert"),
-            lines: delta.lines.slice()
+            lines: delta.lines.slice(),
+            undoOfDelta: delta
         });
     };
     Document.prototype.indexToPosition = function (index, startRow) {

@@ -35,7 +35,7 @@ export namespace Ace {
     clonePos(pos: Point): Point;
     pos(row: number, column: number): Point;
     insertFullLines(row: number, lines: string[]): void;
-    insertMergedLines(position: Position, lines: string[]): Point;
+    insertMergedLines(position: Position, lines: string[], reason?: DeltaReason): Point;
     remove(range: Range): Position;
     removeInLine(row: number, startColumn: number, endColumn: number): Position;
     removeFullLines(firstRow: number, lastRow: number): string[];
@@ -274,6 +274,16 @@ export namespace Ace {
     start: Point;
     end: Point;
     lines: string[];
+    id?: number,
+    folds?: Fold[]
+    docLinesBefore?: string[];
+    docLinesAfter?: string[];
+    undoOfDelta?: Delta;
+    reason?: DeltaReason;
+  }
+
+  export interface DeltaReason {
+    pasted?: Record<string, unknown>;
   }
 
   export interface Annotation {
@@ -445,6 +455,26 @@ export namespace Ace {
       session: EditSession,
       pos: Point,
       prefix: string): Completion[];
+    onGetCopyTextExtended?: (editor: Editor) => OnGetCopyTextExtendedResult | undefined;
+    onPreProcessClipboardOnPasting?: (editor: Editor, clipboardEvent: ClipboardEvent) => PreProcessClipboardOnPastingResult | undefined;
+    onUndoCustomDelta?: (session: EditSession, delta: Delta) => void;
+    onRedoCustomDelta?: (session: EditSession, delta: Delta) => void;
+  }
+
+  export interface OnGetCopyTextExtendedResult {
+    plainText: string;
+    copyLineMode?: boolean;
+    extendedFormats?: ClipboardFormatData[];
+  }
+
+  export interface ClipboardFormatData {
+    format: string;
+    data: string;
+  }
+
+  export interface PreProcessClipboardOnPastingResult {
+    flatTextOverride?: string;
+    deltaReasonDetails?: Record<string, unknown>;
   }
 
   type AfterLoadCallback = (err: Error | null, module: unknown) => void;
@@ -629,6 +659,7 @@ export namespace Ace {
     getScreenLength(): number;
     toJSON(): Object;
     destroy(): void;
+    refreshTokenizerCache(firstRow: number, lastRow: number): void,
   }
 
   export interface KeyBinding {
@@ -862,6 +893,7 @@ export namespace Ace {
 
     on(name: 'blur', callback: (e: Event) => void): void;
     on(name: 'input', callback: () => void): void;
+    on(name: 'preChange', callback: (delta: Delta) => void): void;
     on(name: 'change', callback: (delta: Delta) => void): void;
     on(name: 'changeSelectionStyle', callback: (obj: { data: string }) => void): void;
     on(name: 'changeSession',
@@ -901,6 +933,7 @@ export namespace Ace {
     blur(): void;
     getSelectedText(): string;
     getCopyText(): string;
+    getCopyTextExtended?: () => OnGetCopyTextExtendedResult | undefined;
     execCommand(command: string | string[], args?: any): boolean;
     insert(text: string, pasted?: boolean): void;
     setOverwrite(overwrite: boolean): void;
@@ -1008,6 +1041,7 @@ export namespace Ace {
     setAutoScrollEditorIntoView(enable: boolean): void;
     completers: Completer[];
     completer?: Ace.Autocomplete | InlineAutocomplete,
+    preProcessClipboardOnPasting?: (e: ClipboardEvent) => PreProcessClipboardOnPastingResult | undefined,
   }
 
   type CompleterCallback = (error: any, completions: Completion[]) => void;
